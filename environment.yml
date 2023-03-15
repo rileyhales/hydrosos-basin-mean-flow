@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - geopandas
+  - pandas
+  - numpy
+  - matplotlib
+  - fastparquet
+  - zarr
+  - netcdf4
+  - ffmpeg-python
+  - contextily
+  - xarray
