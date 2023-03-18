@@ -28,60 +28,71 @@ def monthly_mean_table(nc_path):
     )
 
     # calculate monthly averages for all months in period of record
-    monthly_means = df.groupby(df.index.strftime("%Y-%m")).mean()
-    monthly_means.index.name = 'time'
-    # monthly_means.to_csv(f'./tables/{region_name}_monthly_means.csv')
+    mon_means = df.groupby(df.index.strftime("%Y-%m")).mean()
+    mon_means.index.name = 'time'
 
     # define monthly normal based on 1991-2020
-    monthly_normal = df[normal_time_period].groupby(df[normal_time_period].index.strftime("%m")).mean()
-    monthly_normal.index.name = 'month'
-    # monthly_normal.to_csv(f'./tables/{region_name}_monthly_normals_19912020.csv')
+    mon_normals = df[normal_time_period].groupby(df[normal_time_period].index.strftime("%m")).mean()
+    mon_normals.index.name = 'month'
+    mon_normals.transpose().to_parquet(f'./tables/{region_name}_monthly_normals_19912020.parquet')
 
     # create new index with month number for division broadcasting by matching month number
-    monthly_means = (
-        monthly_means
+    mon_means = (
+        mon_means
         .reset_index()
-        .set_index(pd.Series(monthly_means.index).apply(lambda x: x.split('-')[-1]))
+        .set_index(pd.Series(mon_means.index).apply(lambda x: x.split('-')[-1]))
     )
 
     # divide the monthly means by the monthly normals by matching the month
-    monthly_ratios = (
-        monthly_means
+    mon_ratios = (
+        mon_means
         .drop('time', axis=1)
-        .div(monthly_normal.loc[monthly_means.index].values, axis=1)
+        .div(mon_normals.loc[mon_means.index].values, axis=1)
     )
-    monthly_ratios.index = monthly_means['time']
-    monthly_ratios = monthly_ratios.transpose()
-    monthly_ratios.to_parquet(f'./tables/{region_name}_monthly_ratios.parquet')
+    mon_ratios.index = mon_means['time']
+    mon_ratios = mon_ratios.replace([np.inf, -np.inf], np.nan).dropna(axis=1, how='any')  # drop cols with inf or nan
+    mon_ratios.transpose().to_parquet(f'./tables/{region_name}_monthly_ratios.parquet')
 
-    # drop columns with inf or nan values
-    monthly_ratios = monthly_ratios.replace([np.inf, -np.inf], np.nan).dropna(axis=0, how='any')
+    # calculate the ranks by grouping the dataframe by month and ranking values against other values in the same month
+    mon_ranks = pd.concat([
+        mon_ratios[mon_ratios.index.str.endswith(f'-{month}')].rank() for month in
+        pd.Series(mon_ratios.index).apply(lambda x: x.split('-')[-1]).unique()
+    ]).astype(int).sort_index()
+    # monthly_ranks = mon_ratios.rank(axis=0).astype(int)
+    mon_ranks.transpose().to_parquet(f'./tables/{region_name}_monthly_ranks.parquet')
 
-    monthly_ranks = monthly_ratios.rank(axis=0).astype(int)
-    monthly_ranks.to_parquet(f'./tables/{region_name}_monthly_ranks.parquet')
-    monthly_percentiles = monthly_ranks.div(monthly_ranks.max(axis=1), axis=0)
-    monthly_percentiles.to_parquet(f'./tables/{region_name}_monthly_percentiles.parquet')
+    mon_percentile = mon_ranks.div(mon_ranks.max(axis=1), axis=0)
+    mon_percentile.transpose().to_parquet(f'./tables/{region_name}_monthly_percentiles.parquet')
 
-    # classify the values depending on their percentile rank
+    # classify the values depending on their rank percentile
     bins = [0, .13, .28, .72, .87, float('inf')]
-    labels = ['Low Flow', 'Below Normal', 'Normal', 'Above Normal', 'High Flow']
+    classes = ['Low Flow', 'Below Normal', 'Normal', 'Above Normal', 'High Flow']
     colors = ['#CD233F', '#FFA885', '#E7E2BC', '#8ECEEE', '#2C7DCD']
 
     # classify all values in the dataframe into one of 5 classes
-    monthly_classes = pd.DataFrame({col: pd.cut(monthly_percentiles[col], bins=bins, labels=labels) for col in monthly_percentiles.columns})
-    monthly_classes.to_parquet(f'./tables/{region_name}_monthly_classes.parquet')
-    monthly_colors = pd.DataFrame({col: pd.cut(monthly_percentiles[col], bins=bins, labels=colors) for col in monthly_percentiles.columns})
-    monthly_colors.to_parquet(f'./tables/{region_name}_monthly_colors.parquet')
+    monthly_classes = pd.DataFrame({col: pd.cut(mon_percentile[col], bins=bins, labels=classes) for col in mon_percentile.columns})
+    monthly_classes.transpose().to_parquet(f'./tables/{region_name}_monthly_classes.parquet')
+    # monthly_colors = pd.DataFrame({col: pd.cut(mon_percentile[col], bins=bins, labels=colors) for col in mon_percentile.columns})
+    (
+        monthly_classes
+        .replace('Low Flow', '#CD233F')
+        .replace('Below Normal', '#FFA885')
+        .replace('Normal', '#E7E2BC')
+        .replace('Above Normal', '#8ECEEE')
+        .replace('High Flow', '#2C7DCD')
+        .transpose()
+        .to_parquet(f'./tables/{region_name}_monthly_colors.parquet')
+    )
+    # monthly_colors.to_parquet(f'./tables/{region_name}_monthly_colors.parquet')
     return
 
 
 if __name__ == '__main__':
     table_dir = './tables/'
-    ncs = glob.glob('/Users/rchales/Data/geoglows_hindcast/20220430_netcdf/*/*.nc')
+    # ncs = glob.glob('/Users/rchales/Data/geoglows_hindcast/20220430_netcdf/*/*.nc')
+    #
+    # with Pool(6) as p:
+    #     p.map(monthly_mean_table, ncs)
 
-    with Pool(6) as p:
-        p.map(monthly_mean_table, ncs)
-
-    # ncs = glob.glob('/Users/rchales/Data/geoglows_hindcast/20220430_netcdf/central_america-geoglows/*.nc')
-    # monthly_mean_table(ncs[0])
-
+    ncs = glob.glob('/Users/rchales/Data/geoglows_hindcast/20220430_netcdf/central_america-geoglows/*.nc')
+    monthly_mean_table(ncs[0])

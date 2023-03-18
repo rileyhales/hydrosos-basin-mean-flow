@@ -42,17 +42,23 @@ custom_legend = [Line2D([0], [0], color=c, lw=5, label=l) for c, l in zip(colors
 
 
 def _subroutine(g, c):
-    fig, axm = plt.subplots(1, 1, tight_layout=True, figsize=(8, 6), dpi=400)
+    fig, axm = plt.subplots(1, 1, tight_layout=True, figsize=(8, 5), dpi=400)
     fig.suptitle(f'Monthly Mean Basin Flow - {c}', fontsize=16)
     axm.set_ylabel('')
     axm.set_xlabel('')
     axm.set_xticks([])
     axm.set_yticks([])
+
+    # increase the range of the y axes to place a buffer around the plotted area
     g['geometry'].plot(ax=axm, color=g[c], linewidth=0)
+    y_min, y_max = axm.get_ylim()
+    axm.set_ylim(y_min - 0.12 * (y_max - y_min), y_max + 0.12 * (y_max - y_min))
+
     cx.add_basemap(ax=axm, zoom=9, source=cx.providers.Esri.WorldTopoMap, attribution='')
-    axm.legend(custom_legend, labels, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.2))
+    axm.legend(custom_legend, labels, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.11))
     fig.savefig(f'./figures/DR_map_{c.replace("-", "")}.png')
     plt.close(fig)
+    return
 
 
 if __name__ == '__main__':
@@ -64,7 +70,7 @@ if __name__ == '__main__':
     #     p.starmap(join_gpkg_table, zip(gpkg_paths, table_paths))
 
     # gpkg = glob.glob('/Users/rchales/Data/geoglows_delineation/catchment_shapefile/central_america*/*.shp')[0]
-    gpkg = './dominican_republic_catchments.gpkg'
+    gpkg = './dominican_republic_basins.gpkg'
     table = './tables/central_america_monthly_colors.parquet'
     gdf = gpd.read_file(gpkg)
 
@@ -75,7 +81,6 @@ if __name__ == '__main__':
     gdf = gdf.merge(table, left_on='DrainLnID', right_index=True, how='left')
     gdf = gdf[['geometry', *table.columns]]
     gdf = gdf.dropna(axis=0, how='any')
-    # gdf.to_file(f'./gis_src/{region_name}_date_colors.gpkg', driver='GPKG')
 
     with Pool(20) as p:
         p.starmap(_subroutine, [[gdf, col] for col in table.columns])
