@@ -43,7 +43,8 @@ custom_legend = [Line2D([0], [0], color=c, lw=5, label=l) for c, l in zip(colors
 
 def _subroutine(g, c):
     fig, axm = plt.subplots(1, 1, tight_layout=True, figsize=(8, 5), dpi=400)
-    fig.suptitle(f'Monthly Mean Basin Flow - {c}', fontsize=16)
+    # fig.suptitle(f'Monthly Mean Basin Flow - {c}', fontsize=16)
+    fig.suptitle(f'Quarterly Mean Basin Flow - {c.split("-")[0]} Q{c.split("-")[-1]}', fontsize=16)
     axm.set_ylabel('')
     axm.set_xlabel('')
     axm.set_xticks([])
@@ -56,7 +57,8 @@ def _subroutine(g, c):
 
     cx.add_basemap(ax=axm, zoom=9, source=cx.providers.Esri.WorldTopoMap, attribution='')
     axm.legend(custom_legend, labels, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.11))
-    fig.savefig(f'./figures/DR_map_{c.replace("-", "")}.png')
+    # fig.savefig(f'./figures/DR_map_{c.replace("-", "")}.png')
+    fig.savefig(f'./figures/DR_map_quarterly_{c.replace("-", "")}.png')
     plt.close(fig)
     return
 
@@ -70,8 +72,8 @@ if __name__ == '__main__':
     #     p.starmap(join_gpkg_table, zip(gpkg_paths, table_paths))
 
     # gpkg = glob.glob('/Users/rchales/Data/geoglows_delineation/catchment_shapefile/central_america*/*.shp')[0]
-    gpkg = './dominican_republic_basins.gpkg'
-    table = './tables/central_america_monthly_colors.parquet'
+    gpkg = './gis_src/dominican_republic_basins.gpkg'
+    table = './tables/central_america_quarterly_colors.parquet'
     gdf = gpd.read_file(gpkg)
 
     table = pd.read_parquet(table)
